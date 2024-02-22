@@ -1,0 +1,96 @@
+version: '3.8'
+
+services:
+  mysql:
+   image: mariadb:10.4
+   env_file:
+    - .env
+   volumes:
+    - ./mysql:/var/lib/mysql
+   networks:
+    - mysql_bridge
+
+  # First backend with mysql migration
+  backend-1:
+   build:
+    context: .
+    dockerfile: php.dockerfile
+   volumes:
+    - ./src1:/var/www/html
+    - ./migrations:/migrations
+   env_file:
+    - .env
+   command: >
+    sh -c "sleep 10 &&
+    mysql -u $MYSQL_USER -h $MYSQL_HOST -p$MYSQL_PASSWORD $MYSQL_DATABASE < /migrations/migration-books.sql &&
+    php -S 0.0.0.0:8900 -t /var/www/html" 
+   networks:
+    - loadbalancing
+    - mysql_bridge
+   depends_on:
+    - mysql
+
+  backend-2:
+   build:
+    context: .
+    dockerfile: php.dockerfile
+   volumes:
+    - ./src2:/var/www/html
+   env_file:
+    - .env
+   networks:
+    - loadbalancing
+    - mysql_bridge
+   depends_on:
+    - mysql
+    - backend-1
+    
+  backend-3:
+   build:
+    context: .
+    dockerfile: php.dockerfile
+   volumes:
+    - ./src3:/var/www/html
+   env_file:
+    - .env
+   networks:
+    - loadbalancing
+    - mysql_bridge
+   depends_on:
+    - mysql
+    - backend-1
+
+  backend-4:
+   build:
+    context: .
+    dockerfile: php.dockerfile
+   volumes:
+    - ./src4:/var/www/html
+   env_file:
+    - .env
+   networks:
+    - loadbalancing
+    - mysql_bridge
+   depends_on:
+    - mysql
+    - backend-1
+    
+  nginx:
+   build:
+    context: .
+    dockerfile: nginx.dockerfile
+   ports:
+    - 80:80
+   depends_on:
+    - mysql
+    - backend-1
+    - backend-2
+    - backend-3
+    - backend-4
+   networks:
+    - loadbalancing
+
+networks:
+  loadbalancing:
+  mysql_bridge:
+   
